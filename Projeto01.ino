@@ -836,9 +836,13 @@ static byte temperatura_atingida=0;
 	lcd.clear();
 	lcd.print("Transcorrido:");
 	lcd.setCursor(2,1);
-	int dif=(t1.hour - receita.hora_temperatura[0])*60;
+	int dif;
+	
+	if (t1.hour>receita.hora_temperatura[0])  dif=(t1.hour - receita.hora_temperatura[0])*60;
+		else dif=(receita.hora_temperatura[0]- t1.hour)*60;
+	
 	if (t1.min>receita.minuto_temperatura[0]) dif=dif+(t1.min - receita.minuto_temperatura[0]);
-	else dif=dif+(receita.minuto_temperatura[0] - t1.min);
+		else dif=dif+(receita.minuto_temperatura[0] - t1.min);
 	buffer=String(dif)+" minutos";
 	lcd.print(buffer);
 	delay(250);
