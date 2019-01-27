@@ -3,7 +3,7 @@ Controlador para automação de produção de cerveja, construído com Arduino.
 
 Este projeto é fruto da necessidade de automação do processo de brassagem de cervejas, no âmbito doméstico.
 				
-   No protótipo desenvolvido, utilizou-se os seguintes componentes:
+   	No protótipo desenvolvido, utilizou-se os seguintes componentes:
     -> 1PCS 5V low level trigger One 1 Channel Relay Module interface Board Shield For PIC AVR DSP ARM MCU Arduino .
     -> 1PCS DS1820 Stainless steel package Waterproof DS18b20 temperature probe temperature sensor 18B20 For Arduino
     -> Uno R3 Case Enclosure Transparent Acrylic Box Clear Cover Compatible with Arduino UNO R3
