@@ -97,14 +97,22 @@ LiquidCrystal_I2C lcd(0x27,2,1,0,4,5,6,7,3, POSITIVE); // declaracao padronizada
 #define EXEC_RAMPA3 19
 #define SUBIR_TEMP_RAMPA2 20
 #define SUBIR_TEMP_RAMPA3 21
+#define SUBIR_TEMP_MASHOUT 22
+#define SUBIR_TEMP_FERVURA 23
+#define EXEC_MASHOUT 24
+#define EXEC_FERVURA 25
 
+
+
+#define RAMPA1 0
+#define RAMPA2 1
+#define RAMPA3 2
+#define MASHOUT 3
+#define FERVURA 4
+#define RESFRIAMENTO 5
 
 
 #define MAX_RAMPAS 3
-#define TEMPERATURA_MASHOUT 32 //75
-#define TEMPERATURA_FERVURA 32 //94
-#define TEMPO_RESFRIAMENTO 30 
-#define TEMPERATURA_RESFRIAMENTO 30
 #define FATOR_CORRECAO_TEMPERATURA 2 // ADICIONA X GRAUS A TEMPERATURA PARA ADICAO DE MALTE
 
 
@@ -122,18 +130,12 @@ byte sons=ATIVO;
 byte etapa_da_mostura = EXEC_RAMPA1;
 
 unsigned int qtd_rampas=1;
-unsigned int temperatura_rampa[MAX_RAMPAS];
-unsigned int tempo[MAX_RAMPAS];
-unsigned int tempo_mashout;
-unsigned int tempo_fervura;
-unsigned int hora_rampa[MAX_RAMPAS];
-unsigned int minuto_rampa[MAX_RAMPAS];
-unsigned int hora_mashout;
-unsigned int minuto_mashout;
-unsigned int hora_fervura;
-unsigned int minuto_fervura;
-unsigned int hora_resfriamento;
-unsigned int minuto_resfriamento;
+unsigned int temperatura_rampa[MAX_RAMPAS+3]; //numero de rampas de mostura + mashout + fervura + resfriamento
+unsigned int tempo[MAX_RAMPAS+3]; //numero de rampas de mostura + mashout + fervura + resfriamento
+unsigned int hora_rampa[MAX_RAMPAS+3]; //numero de rampas de mostura + mashout + fervura + resfriamento
+unsigned int minuto_rampa[MAX_RAMPAS+3]; //numero de rampas de mostura + mashout + fervura + resfriamento
+
+
 
 
 
@@ -141,7 +143,10 @@ unsigned int minuto_resfriamento;
 
 void setup() {
  
-
+temperatura_rampa[MASHOUT]=32; //78
+temperatura_rampa[FERVURA]=32; //94
+temperatura_rampa[RESFRIAMENTO]=30; //30
+tempo[RESFRIAMENTO]=30; //30
  
 // SENSOR TEMPERATURA 
 temperatura_barramento.begin();
@@ -218,6 +223,11 @@ void loop() {
 	if (menu_item==MENU_MALTE_ADICIONADO) menu_malte_adicionado();
 	if (menu_item==MENU_TEMPERATURA_CONSTANTE) menu_temperatura_constante();
 	if (menu_item==ETAPA_TEMPERATURA_CONSTANTE) realiza_temperatura_constante();
+	if (menu_item==SUBIR_TEMP_MASHOUT) ajusta_temperatura_mashout();
+	if (menu_item==EXEC_MASHOUT) realiza_mashout();
+	if (menu_item==SUBIR_TEMP_FERVURA) ajusta_temperatura_fervura();
+	if (menu_item==EXEC_FERVURA) realiza_fervura();
+	
 	
 
 delay(100);
@@ -302,7 +312,7 @@ void menu_recebe_tempo()
 void menu_mashout()
 {
 	if(menu_item==MENU_MASHOUT){
-	tempo_mashout=controle_numeros("MASHOUT(min):",2);
+	tempo[MASHOUT]=controle_numeros("MASHOUT(min):",2);
 	menu_item=MENU_FERVURA;
 	}
 
@@ -311,7 +321,7 @@ void menu_mashout()
 void menu_fervura()
 {
 	if(menu_item==MENU_FERVURA){
-	tempo_fervura=controle_numeros("FERVURA(min):",3);
+	tempo[FERVURA]=controle_numeros("FERVURA(min):",3);
 	menu_item=MENU_MOSTURA;
 	}
 	
@@ -343,7 +353,8 @@ void menu_iniciar_fervura()
 	controle_comandos(&retorno);
 	
 		if(retorno==1){
-		menu_item=ETAPA_FERVURA;
+		menu_item=SUBIR_TEMP_FERVURA;
+		if(sons=ATIVO) beep_pi_longo();
 		}
 	delay(200);
 	}
@@ -358,7 +369,8 @@ void menu_final_fervura()
 	byte retorno=0;
 	exibe_sim_nao("RESFRIAMENTO:");
 	controle_comandos(&retorno);
- 
+	if(sons=ATIVO) beep_pipi();
+	
 		if(retorno==1){
 		menu_item=ETAPA_RESFRIAMENTO;
 		}
@@ -375,13 +387,13 @@ void menu_malte_adicionado()
 	if(sons==ATIVO) beep_pipi();
 	exibe_sim_nao("MALTE ADICIONADO");
 	controle_comandos(&retorno);
-	controla_temperatura(temperatura_rampa[0]+FATOR_CORRECAO_TEMPERATURA); // mantem temperatura controlada até confirmar a adicao de malte
+	controla_temperatura(temperatura_rampa[RAMPA1]+FATOR_CORRECAO_TEMPERATURA); // mantem temperatura controlada até confirmar a adicao de malte
 
 		if(retorno==1){
 		menu_item=ETAPA_MOSTURA;
-		Time t2=calcula_horario(tempo[0]);
-		hora_rampa[0]=t2.hour;
-		minuto_rampa[0]=t2.min;
+		Time t2=calcula_horario(tempo[RAMPA1]);
+		hora_rampa[RAMPA1]=t2.hour;
+		minuto_rampa[RAMPA1]=t2.min;
 		if(sons==ATIVO) beep_pi_longo();
 
 		}
@@ -394,7 +406,7 @@ void menu_temperatura_constante()
 	if(menu_item==MENU_TEMPERATURA_CONSTANTE){
 	String buffer PROGMEM;
 	
-	temperatura_rampa[0]=controle_numeros("TEMPERATURA FIXA",2);
+	temperatura_rampa[RAMPA1]=controle_numeros("TEMPERATURA FIXA",2);
 	menu_item=ETAPA_TEMPERATURA_CONSTANTE;
 	if(sons==ATIVO) beep_pi_longo();
 	lcd.clear();
@@ -642,9 +654,10 @@ void realiza_adicao_malte()
 	if(menu_item==ETAPA_ADICAO_MALTE){
 		
 		ativa_bomba();
-		unsigned int temperatura_alvo= temperatura_rampa[0]+FATOR_CORRECAO_TEMPERATURA; //SOBE A TEMPERATURA X GRAUS ACIMA DA PRIMEIRA RAMPA
+		unsigned int temperatura_alvo= temperatura_rampa[RAMPA1]+FATOR_CORRECAO_TEMPERATURA; //SOBE A TEMPERATURA X GRAUS ACIMA DA PRIMEIRA RAMPA
 		controla_temperatura(temperatura_alvo);
-		exibe_subindo_temperatura_adicao_malte();
+		exibe_subindo_temperatura_alternados(RAMPA1);
+		
 		unsigned int temperatura_atual=le_temperatura();
 			
 			if(temperatura_atual>=temperatura_alvo) menu_item=MENU_MALTE_ADICIONADO;
@@ -653,132 +666,90 @@ void realiza_adicao_malte()
 
 }
 
+void ajusta_temperatura_mashout()
+{
+	if(menu_item==SUBIR_TEMP_MASHOUT){
+		unsigned int temperatura_atual=le_temperatura();
+		controla_temperatura(temperatura_rampa[MASHOUT]);
+		exibe_subindo_temperatura_alternados(MASHOUT);
+		ativa_bomba();
+
+			if(temperatura_atual>=temperatura_rampa[MASHOUT]) {
+				Time t2=calcula_horario(tempo[MASHOUT]);
+				hora_rampa[MASHOUT]=t2.hour;
+				minuto_rampa[MASHOUT]=t2.min;
+				if(sons==ATIVO) beep_pi_longo();	
+				menu_item=EXEC_MASHOUT;
+			}
+		
+	}	
+	
+}
+
 void realiza_mashout()
 {
-	if(menu_item==ETAPA_MASHOUT){
-		ativa_bomba();
-		lcd.clear();
-		lcd.print("MASHOUT >>>>");
-		delay(5000);
-		if(sons==ATIVO) beep_pi_longo();
-		
-		byte temperatura = le_temperatura();
-
-			while(temperatura<TEMPERATURA_MASHOUT){
-			ativa_resistencia();
-			temperatura = le_temperatura();
-			exibe_subindo_temperatura_mashout();
-			delay(250);
-			}
-		if(sons==ATIVO) beep_pi_longo(); // temperatura atingida
-		Time t1=rtc.getTime();
-		Time t2 = calcula_horario(tempo_mashout);
-		hora_mashout=t2.hour;
-		minuto_mashout=t2.min+1;
-
-		
-			while(hora_mashout>=t1.hour && minuto_mashout>t1.min){
-			controla_temperatura(TEMPERATURA_MASHOUT);
-			exibe_dados_mashout();
-			t1=rtc.getTime(); //atualiza hora
-			delay(250);
-			}
-		if(sons==ATIVO) beep_pipi();
-		desativa_resistencia();
-		desativa_bomba();
-		delay(250);
-		menu_item=MENU_INICIAR_FERVURA;
-	}
+	
+	if(menu_item==EXEC_MASHOUT){
+		if(realiza_rampa(MASHOUT)==0){ 
+			if(sons==ATIVO) beep_pi_longo();
+			desativa_bomba();
+			menu_item=MENU_INICIAR_FERVURA;
 			
+		}	
+		
+	}
 }
+	
+void ajusta_temperatura_fervura()
+{
+		if(menu_item==SUBIR_TEMP_FERVURA){
+		unsigned int temperatura_atual=le_temperatura();
+		controla_temperatura(temperatura_rampa[FERVURA]);
+		exibe_subindo_temperatura_alternados(FERVURA);
+		//ativa_bomba();
 
+			if(temperatura_atual>=temperatura_rampa[FERVURA]) {
+				Time t2=calcula_horario(tempo[FERVURA]);
+				hora_rampa[FERVURA]=t2.hour;
+				minuto_rampa[FERVURA]=t2.min;
+				if(sons==ATIVO) beep_pi_longo();	
+				menu_item=EXEC_FERVURA;
+			}
+		
+	}
+	
+	
+}
+	
 void realiza_fervura()
 {
-	if(menu_item==ETAPA_FERVURA){
+	if(menu_item==EXEC_FERVURA){
 		
-		lcd.clear();
-		lcd.print("FERVURA >>>>");
-		delay(5000);
-		
-		byte temperatura = le_temperatura();
-		if(sons==ATIVO) beep_pi_longo();	
-			while(temperatura<TEMPERATURA_FERVURA){
-			ativa_resistencia();
-			temperatura = le_temperatura();
-			exibe_subindo_temperatura_fervura();
-			delay(250);
-			}
-	Time t1=rtc.getTime();		
-	Time t2 = calcula_horario(tempo_fervura);
-	hora_fervura=t2.hour;
-	minuto_fervura=t2.min+1;
-			
-	if(sons==ATIVO) beep_pi_longo();	
-		while(hora_fervura>=t1.hour && minuto_fervura>t1.min){
-			//controla_temperatura(TEMPERATURA_FERVURA);
-			ativa_resistencia();
-			exibe_dados_fervura();
-			t1=rtc.getTime(); //atualiza hora
-			delay(250);
+	if(tempo_restante(FERVURA)>0){
+	ativa_resistencia();
+	exibe_dados_alternados(FERVURA);
+	}
+	else{
+			if(sons==ATIVO) beep_pipi();
+			menu_item=MENU_FINAL_FERVURA;
+			desativa_resistencia();
 		}
-	
-	}// FIM DO IF
-if(sons==ATIVO) beep_pipi();	
-desativa_resistencia();
-desativa_bomba();
-delay(250);
-menu_item=MENU_FINAL_FERVURA;
 		
+	}
 }
 	
+		
 
 
 void realiza_resfriamento()
 {
 	if(menu_item==ETAPA_RESFRIAMENTO){
+	desativa_resistencia();
 	lcd.clear();
     lcd.print("RESFRIAMENTO >>");
     delay(5000);
     if(sons==ATIVO) beep_pi_longo();	
-    byte temperatura = le_temperatura();
-    desativa_bomba();
-    desativa_resistencia();
     
-    Time t1=rtc.getTime();    
-    Time t2 = calcula_horario(TEMPO_RESFRIAMENTO);
-    hora_resfriamento=t2.hour;
-    minuto_resfriamento=t2.min;
-
-		while(temperatura>TEMPERATURA_RESFRIAMENTO){
-		  temperatura = le_temperatura();
-		  exibe_dados_resfriamento();
-		  delay(250);
-		}
-	}
-if(sons==ATIVO) beep_pipi();	
-}
-
-
-void realiza_temperatura_constante()
-{
-	static byte atingida=0;
-	
-	if(menu_item==ETAPA_TEMPERATURA_CONSTANTE){
-	controla_temperatura(temperatura_rampa[0]);
-	//ativa_bomba();
-	
-	if (le_temperatura()<temperatura_rampa[0] && atingida==0) exibe_subindo_temperatura_constante(); 
-	
-	if (le_temperatura()==temperatura_rampa[0] && atingida==0){
-		 atingida=1;
-		 Time t1=rtc.getTime();
-		 hora_rampa[0]=t1.hour;
-		 minuto_rampa[0]=t1.min+1;
-	}
-	
-	if (atingida==1) exibe_temperatura_constante();
-	
-	delay(250);
 	}
 }
 
@@ -794,7 +765,7 @@ static byte temperatura_atingida=0;
 	lcd.clear();
 	lcd.print("Temp(c) | Alvo:");
 	lcd.setCursor(2,1);
-	buffer=String(le_temperatura())+"    |   "+String(temperatura_rampa[0]);
+	buffer=String(le_temperatura())+"    |   "+String(temperatura_rampa[RAMPA1]);
 	lcd.print(buffer);  
 	delay(250);
 	}
@@ -802,13 +773,12 @@ static byte temperatura_atingida=0;
 	lcd.clear();
 	lcd.print("Transcorrido:");
 	lcd.setCursor(2,1);
-	int dif;
+	int dif, r1,r2;
 	
-	if (t1.hour>hora_rampa[0])  dif=(t1.hour - hora_rampa[0])*60;
-		else dif=(hora_rampa[0]- t1.hour)*60;
+	r1=minuto_total(t1.hour,t1.min);
+	r2=minuto_total(hora_rampa[RAMPA1],minuto_rampa[RAMPA1]);
+	dif=(r1-r2);
 	
-	if (t1.min>minuto_rampa[0]) dif=dif+(t1.min - minuto_rampa[0]);
-		else dif=dif+(minuto_rampa[0] - t1.min);
 	buffer=String(dif)+" minutos";
 	lcd.print(buffer);
 	delay(250);
@@ -823,7 +793,7 @@ String buffer PROGMEM;
 	lcd.clear();
 	lcd.print("Temp(c) | Alvo:");
 	lcd.setCursor(2,1);
-	buffer=String(le_temperatura())+"    |   "+String(temperatura_rampa[0]);
+	buffer=String(le_temperatura())+"    |   "+String(temperatura_rampa[RAMPA1]);
 	lcd.print(buffer);	
 	delay(250);
 	}
@@ -838,7 +808,7 @@ String buffer PROGMEM;
 
 
 
-void exibe_dados_resfriamento()
+void exibe_dados_alternados(unsigned int RAMPA)
 {
 Time t1=rtc.getTime();
 String buffer PROGMEM;
@@ -847,7 +817,7 @@ String buffer PROGMEM;
 	lcd.clear();
 	lcd.print("Temp(c) | Alvo:");
 	lcd.setCursor(2,1);
-	buffer=String(le_temperatura())+"    |   "+String(TEMPERATURA_RESFRIAMENTO);
+	buffer=String(le_temperatura())+"    |   "+String(temperatura_rampa[RAMPA]);
 	lcd.print(buffer);  
 	delay(250);
 	}
@@ -855,14 +825,14 @@ String buffer PROGMEM;
 	lcd.clear();
 	lcd.print("Tempo restante:");
 	lcd.setCursor(2,1);
-	int dif=(hora_resfriamento-t1.hour)*60;
-	dif=dif+(minuto_resfriamento-t1.min);
+	int dif=tempo_restante(RAMPA);
 	
 	buffer=String(dif)+" minutos";
 	lcd.print(buffer);
 	delay(250);
 	}
 }
+
 
 
 
@@ -878,44 +848,9 @@ return temperatura;
 delay(50); //espera antes de ler de novo
 }
 
-void exibe_dados_mostura(unsigned int num_rampa,unsigned int subida)
-{
-Time t2=rtc.getTime();
-
-if((t2.sec % 10)<=5) exibe_temperatura_alvo(num_rampa);
-else if(subida==INATIVO) exibe_tempo_alvo(num_rampa);
-else exibe_subindo_temperatura();
-}
 
 
-
-void exibe_dados_fervura()
-{
-Time t1=rtc.getTime();
-String buffer PROGMEM;
-
-	if((t1.sec % 10)<=5){
-		lcd.clear();
-		lcd.print("Temp(c) | Alvo:");
-		lcd.setCursor(2,1);
-		buffer=String(le_temperatura())+"    |   "+String(TEMPERATURA_FERVURA);
-		lcd.print(buffer);
-		delay(250);
-		}
-	else {
-		lcd.clear();
-		lcd.print("Tempo restante:");
-		lcd.setCursor(2,1);	
-		int dif=(hora_fervura-t1.hour)*60;
-		dif=dif+(minuto_fervura-t1.min);
-		buffer=String(dif)+" minutos";
-		lcd.print(buffer);
-		delay(250);
-		}
-}
-
-
-void exibe_subindo_temperatura_mashout()
+void exibe_subindo_temperatura_alternados(unsigned int RAMPA)
 {
 Time t1=rtc.getTime();
 String buffer PROGMEM;
@@ -924,129 +859,26 @@ String buffer PROGMEM;
 	lcd.clear();
 	lcd.print("Temp(c) | Alvo:");
 	lcd.setCursor(2,1);
-	buffer=String(le_temperatura())+"    |   "+String(TEMPERATURA_MASHOUT);
-	lcd.print(buffer);	
-	delay(250);
-	}
-	else{
-	lcd.clear();
-	lcd.print("MASHOUT> Subindo");
-	lcd.setCursor(0,1);
-	lcd.print("temperatura...");
-	delay(250);
-	}
-
-}
-
-void exibe_subindo_temperatura_fervura()
-{
-Time t1=rtc.getTime();
-String buffer PROGMEM;
-
-	if((t1.sec % 10)<=5){
-	lcd.clear();
-	lcd.print("Temp(c) | Alvo:");
-	lcd.setCursor(2,1);
-	buffer=String(le_temperatura())+"    |   "+String(TEMPERATURA_FERVURA);
-	lcd.print(buffer);	
-	delay(150);
-	}
-	else{
-	lcd.clear();
-	lcd.print("FERVURA> Subindo");
-	lcd.setCursor(0,1);
-	lcd.print("temperatura...");
-	delay(150);
-	}
-
-}
-
-
-void exibe_subindo_temperatura_adicao_malte()
-{
-Time t1=rtc.getTime();
-String buffer PROGMEM;
-
-	if((t1.sec % 10)<=5){
-	lcd.clear();
-	lcd.print("Temp(c) | Alvo:");
-	lcd.setCursor(2,1);
-	buffer=String(le_temperatura())+"    |   "+String(temperatura_rampa[0]+FATOR_CORRECAO_TEMPERATURA);
-	lcd.print(buffer);	
-	delay(250);
-	}
-	else{
-	lcd.clear();
-	lcd.print("ADICAO DE MALTE");
-	lcd.setCursor(0,1);
-	lcd.print("Subindo temp...");
-	delay(250);
-	}
-
-}
-
-
-
-
-void exibe_dados_mashout()
-{
-Time t1=rtc.getTime();
-String buffer PROGMEM;
 	
-	if((t1.sec % 10)<=5){
-	lcd.clear();
-	lcd.print("Temp(c) | Alvo:");
-	lcd.setCursor(2,1);
-	buffer=String(le_temperatura())+"    |   "+String(TEMPERATURA_MASHOUT);
-	lcd.print(buffer);
-	delay(150);
+	if(RAMPA==RAMPA1) buffer=String(le_temperatura())+"    |   "+String(temperatura_rampa[RAMPA1]+FATOR_CORRECAO_TEMPERATURA);
+	else buffer=String(le_temperatura())+"    |   "+String(temperatura_rampa[RAMPA]);
+	
+	lcd.print(buffer);	
+	delay(250);
 	}
 	else{
 	lcd.clear();
-	lcd.print("Tempo restante:");
-	lcd.setCursor(2,1);
-	int dif=(hora_mashout-t1.hour)*60;
-	buffer=String(dif)+" minutos";
-	lcd.print(buffer);
-	delay(150);
-	}
-
-
-}
-
-void exibe_subindo_temperatura()
-{
-	lcd.clear();
-	lcd.print("Subindo");
+	if(RAMPA==MASHOUT) lcd.print("MASHOUT> Subindo");
+	if(RAMPA==FERVURA) lcd.print("FERVURA> Subindo");
+	if(RAMPA==RAMPA1) lcd.print("RAMPA N1> Subindo");
+	if(RAMPA==RAMPA2) lcd.print("RAMPA N2> Subindo");
+	if(RAMPA==RAMPA3) lcd.print("RAMPA N3> Subindo");
+	
 	lcd.setCursor(0,1);
 	lcd.print("temperatura...");
-	delay(150);
-}
+	delay(250);
+	}
 
-
-void exibe_temperatura_alvo(unsigned int num_rampa)
-{
-String buffer PROGMEM;
-
-lcd.clear();
-lcd.print("Temp(c) | Alvo:");
-lcd.setCursor(2,1);
-buffer=String(le_temperatura())+"    |   "+String(temperatura_rampa[num_rampa]);
-lcd.print(buffer);
-delay(150);
-}
-
-void exibe_tempo_alvo(unsigned int num_rampa)
-{
-
-String buffer PROGMEM;
-
-lcd.clear();
-lcd.print("Tempo restante:");
-lcd.setCursor(2,1);
-buffer=String(tempo_restante(num_rampa))+" minutos";
-lcd.print(buffer);
-delay(150);
 }
 
 
@@ -1131,11 +963,45 @@ digitalWrite(PINO_RELE_BAIXO, HIGH);
 int tempo_restante(unsigned int num_rampa)
 {
 Time t1=rtc.getTime();
-int dif=(hora_rampa[num_rampa]-t1.hour)*60;
+int r1 = minuto_total(t1.hour,t1.min);
+int r2 = minuto_total(hora_rampa[num_rampa],minuto_rampa[num_rampa]);
 
-dif=dif+(minuto_rampa[num_rampa]-t1.min);
+int dif=(r2-r1);
 return dif+1;
 }
+
+int minuto_total(unsigned int hora, unsigned int minuto)
+{
+	int r = (hora*60) + minuto;
+	return r;
+}
+
+
+void realiza_temperatura_constante()
+{
+	static byte atingida=0;
+	
+	if(menu_item==ETAPA_TEMPERATURA_CONSTANTE){
+	controla_temperatura(temperatura_rampa[RAMPA1]);
+	//ativa_bomba();
+	
+	if (le_temperatura()<temperatura_rampa[RAMPA1] && atingida==0) exibe_subindo_temperatura_constante(); 
+	
+	if (le_temperatura()==temperatura_rampa[RAMPA1] && atingida==0){
+		 atingida=1;
+		 Time t1=rtc.getTime();
+		 hora_rampa[RAMPA1]=t1.hour;
+		 minuto_rampa[RAMPA1]=t1.min;
+	}
+	
+	if (atingida==1) exibe_temperatura_constante();
+	
+	delay(250);
+	}
+}
+
+
+
 
 
 void realiza_mostura()
@@ -1147,7 +1013,7 @@ void realiza_mostura()
 	switch(etapa_da_mostura){
 	
 	case EXEC_RAMPA1:
-	if(realiza_rampa(0)==0){
+	if(realiza_rampa(RAMPA1)==0){
 		
 		if(qtd_rampas>=2){
 		popup_msg("INDO PARA...",2);
@@ -1157,31 +1023,31 @@ void realiza_mostura()
 		}
 		else {
 			if(sons=ATIVO) beep_pi_longo();
-			menu_item=ETAPA_MASHOUT;
+			menu_item=SUBIR_TEMP_MASHOUT;
 			break;
 		}
 	}
 	break;
 		
 	case SUBIR_TEMP_RAMPA2:
-	controla_temperatura(temperatura_rampa[1]);
-	exibe_dados_mostura(1,ATIVO);
+	controla_temperatura(temperatura_rampa[RAMPA2]);
+	exibe_subindo_temperatura_alternados(RAMPA2);
 	
 	temperatura_atual = le_temperatura();
 	
-	if(temperatura_atual>=temperatura_rampa[1]){
+	if(temperatura_atual>=temperatura_rampa[RAMPA2]){
 		if(sons=ATIVO) beep_pi_longo();
 		
-		Time t2=calcula_horario(tempo[1]);
-		hora_rampa[1]=t2.hour;
-		minuto_rampa[1]=t2.min;
+		Time t2=calcula_horario(tempo[RAMPA2]);
+		hora_rampa[RAMPA2]=t2.hour;
+		minuto_rampa[RAMPA2]=t2.min;
 		etapa_da_mostura=EXEC_RAMPA2;
 
 	}
 	break;	
 	
 	case EXEC_RAMPA2:
-	if(realiza_rampa(1)==0){
+	if(realiza_rampa(RAMPA2)==0){
 		if(qtd_rampas>=3){
 		popup_msg("INDO PARA...",2);
 		popup_msg("RAMPA N3",2);
@@ -1189,33 +1055,33 @@ void realiza_mostura()
 		etapa_da_mostura=SUBIR_TEMP_RAMPA3;
 		}
 		else{
-			menu_item=ETAPA_MASHOUT;
+			menu_item=SUBIR_TEMP_MASHOUT;
 			if(sons=ATIVO) beep_pi_longo();
 		}
 	}
 	break;	
 	
 	case SUBIR_TEMP_RAMPA3:
-	controla_temperatura(temperatura_rampa[2]);
-	exibe_dados_mostura(2,ATIVO);
+	controla_temperatura(temperatura_rampa[RAMPA3]);
+	exibe_subindo_temperatura_alternados(RAMPA2);
 	
 	temperatura_atual = le_temperatura();
 	
-	if(temperatura_atual>=temperatura_rampa[2]){
+	if(temperatura_atual>=temperatura_rampa[RAMPA3]){
 		if(sons=ATIVO) beep_pi_longo();
 		
-		Time t2=calcula_horario(tempo[1]);
-		hora_rampa[2]=t2.hour;
-		minuto_rampa[2]=t2.min;
+		Time t2=calcula_horario(tempo[RAMPA3]);
+		hora_rampa[RAMPA3]=t2.hour;
+		minuto_rampa[RAMPA3]=t2.min;
 		
 		etapa_da_mostura=EXEC_RAMPA3;
 		}
 	break;
 	
 	case EXEC_RAMPA3:
-		if(realiza_rampa(2)==0){
+		if(realiza_rampa(RAMPA3)==0){
 		if(sons=ATIVO) beep_pi_longo();
-		menu_item=ETAPA_MASHOUT;
+		menu_item=SUBIR_TEMP_MASHOUT;
 		
 	}
 	break;
@@ -1231,10 +1097,12 @@ unsigned int realiza_rampa(unsigned int RAMPA)
 {
 if(tempo_restante(RAMPA)>0){
 	controla_temperatura(temperatura_rampa[RAMPA]);
-	exibe_dados_mostura(RAMPA,INATIVO);
+	exibe_dados_alternados(RAMPA);
+	
 	ativa_bomba();
 	
 	return (1);
 	}
 return(0);
 }
+
