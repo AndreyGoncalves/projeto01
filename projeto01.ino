@@ -33,6 +33,12 @@
 
 
 
+/*
+VERSAO 2.0 - IMPLEMENTADO SALVAMENTO DA ULTIMA RECEITA PROGRAMADA
+*/
+
+
+ 
 
 // ----------------------------------- bloco de inclusão de bibliotecas -------------------//
 
@@ -95,6 +101,7 @@ LiquidCrystal_I2C lcd(0x27,2,1,0,4,5,6,7,3, POSITIVE); // declaracao padronizada
 #define MENU_TEMPERATURA_CONSTANTE 15
 #define ETAPA_TEMPERATURA_CONSTANTE 16
 
+
 #define EXEC_RAMPA1 17
 #define EXEC_RAMPA2 18
 #define EXEC_RAMPA3 19
@@ -104,7 +111,8 @@ LiquidCrystal_I2C lcd(0x27,2,1,0,4,5,6,7,3, POSITIVE); // declaracao padronizada
 #define SUBIR_TEMP_FERVURA 23
 #define EXEC_MASHOUT 24
 #define EXEC_FERVURA 25
-
+#define MENU_ULTIMA_RECEITA 26
+#define MENU_GRAVAR_RECEITA 27
 
 
 #define RAMPA1 0
@@ -145,6 +153,9 @@ unsigned int minuto[MAX_RAMPAS+3]; //numero de rampas de mostura + mashout + fer
 // =================== FUNÇÃO SETUP =============//
 
 void setup() {
+ 
+//Serial.begin(9600);
+
  
 temperatura[MASHOUT]=32; //78
 temperatura[FERVURA]=32; //94
@@ -230,6 +241,8 @@ void loop() {
 	if (menu_item==EXEC_MASHOUT) realiza_mashout();
 	if (menu_item==SUBIR_TEMP_FERVURA) ajusta_temperatura_fervura();
 	if (menu_item==EXEC_FERVURA) realiza_fervura();
+	if (menu_item==MENU_ULTIMA_RECEITA) menu_ultima_receita();
+	if (menu_item==MENU_GRAVAR_RECEITA) menu_gravar_receita();
 	
 	
 
@@ -239,27 +252,110 @@ delay(100);
 
 
 
+
 void menu_principal()
 {
 	if(menu_item==MENU_PRINCIPAL) {
-
-	byte retorno=0;
-
-	exibe_sim_nao("BRASSAGEM:");
-	controle_comandos(&retorno);
+		
+	static int item_selecionado;
 	
-		if(retorno==1){
-		menu_item=MENU_RAMPAS;
-		if(sons==ATIVO) beep_pi_longo();
-		//lcd.clear();	
-		}
-		if(retorno==2){
-		menu_item=MENU_TEMPERATURA_CONSTANTE;
-		if(sons==ATIVO) beep_pipi();
-		}
-	delay(100);
+	String menu_rotulos[3] PROGMEM = {
+		"NOVA RECEITA",
+		"RECEITA SALVA",
+		"TEMP. FIXA"
+	};
+
+
+// bytes que representas as setas
+	byte seta_direita[8] = {
+	  B10000,
+	  B11000,
+	  B11100,
+	  B11110,
+	  B11110,
+	  B11100,
+	  B11000,
+	  B10000
+	};
+
+	byte seta_esquerda[8] = {
+	  B00001,
+	  B00011,
+	  B00111,
+	  B01111,
+	  B01111,
+	  B00111,
+	  B00011,
+	  B00001
+	};	
+
+
+	
+//-------------- rotina para desenhar o menu --------------//
+	lcd.noBlink(); //desativa blink do LCD
+	
+	// vai criar novo caracter 
+	lcd.createChar(0, seta_direita);
+	lcd.createChar(1, seta_esquerda);
+	lcd.clear();
+
+	lcd.write(byte(0)); //desenha seta lado esquerdo
+	lcd.setCursor(4,0);
+
+	unsigned int pos=((14-menu_rotulos[item_selecionado].length()) / 2)+1; //calcula posicao mais central
+	lcd.setCursor(pos,0); //posiciona o cursor
+	lcd.print(menu_rotulos[item_selecionado]); // imprime o item de menu atual
+
+	lcd.setCursor(15,0); //desenha seta lado direito
+	lcd.write(byte(1));
+
+	lcd.setCursor(0,1); //posiciona na linha de baixo
+	lcd.print(F(" Temperatura:"));
+	lcd.print(leitura_temperatura());
+
+
+
+//------------ rotina de controle e movimentacao dos itens do menu ---------//
+	byte retorno=0;
+	controle_comandos(&retorno);
+
+	if (retorno==12){ //CIMA
+		item_selecionado+=1;
+		if (item_selecionado>2) item_selecionado=0;
+		
 	}
-}
+
+	if (retorno==13){ //BAIXO
+		item_selecionado-=1;
+		if (item_selecionado<0) item_selecionado=2;
+		
+	}
+
+	if(retorno==16){ //OK
+		
+		switch (item_selecionado){
+			case 0:
+			menu_item=MENU_RAMPAS;
+		
+			break;
+			
+			case 1:
+			menu_item=MENU_ULTIMA_RECEITA; 
+			break;
+			
+			case 2:
+			menu_item=MENU_TEMPERATURA_CONSTANTE; 
+			break;
+		}
+
+	}
+
+	delay(100);
+	} //fim do IF
+
+} //FIM DA FUNCAO
+
+
 
 
 void menu_recebe_rampas()
@@ -328,15 +424,35 @@ void menu_fervura()
 {
 	if(menu_item==MENU_FERVURA){
 	tempo[FERVURA]=controle_numeros("FERVURA(min):",3);
-	menu_item=MENU_MOSTURA;
+	menu_item=MENU_GRAVAR_RECEITA;
 	}
 	
 }
- 
+
+
+void menu_gravar_receita()
+{
+	if(menu_item==MENU_GRAVAR_RECEITA){
+		byte retorno=0;
+		
+	exibe_sim_nao("GRAVAR RECEITA"); //pergunta se deseja gravar receita
+	controle_comandos(&retorno);
+	
+		if(retorno==1){
+		grava_receita(); // chama a funçao que grava na memoria a ultima receita
+		if(sons==ATIVO) beep_pipi();
+		popup_msg("  RECEITA",3);
+		popup_msg("  GRAVADA",3);
+		menu_item=MENU_MOSTURA;
+		}	
+	}
+}
+
 void menu_mostura()
 {
 	if(menu_item==MENU_MOSTURA) {
 	byte retorno=0;
+
 	
 	exibe_sim_nao("INICIAR MOSTURA");
 	controle_comandos(&retorno);
@@ -344,10 +460,12 @@ void menu_mostura()
 		if(retorno==1){
 		menu_item=ETAPA_ADICAO_MALTE;
 		if(sons==ATIVO) beep_pi_longo;
+		
 		}
 	delay(100);
 	}
 }
+
 
 
 void menu_iniciar_fervura()
@@ -362,7 +480,7 @@ void menu_iniciar_fervura()
 		menu_item=SUBIR_TEMP_FERVURA;
 		if(sons=ATIVO) beep_pi_longo();
 		}
-	delay(200);
+	delay(100);
 	}
 }
 
@@ -638,10 +756,11 @@ void controle_comandos(byte *valor)
 		if(resultado.value==BT_OK){
 			if(sons==ATIVO) beep_pi();
 			*valor=16;
+			
 		 }
-      
+       resultado.value=NULL;
        }
-      delay(100);
+      delay(150);
       receptor.resume(); //Le o próximo valor 
     
 }
@@ -1027,11 +1146,11 @@ void realiza_mostura()
 		if(qtd_rampas>=2){
 		popup_msg("INDO PARA...",2);
 		popup_msg("RAMPA N2",2);
-		if(sons=ATIVO) beep_pi_longo();
+		if(sons==ATIVO) beep_pi_longo();
 		etapa_da_mostura=SUBIR_TEMP_RAMPA2;
 		}
 		else {
-			if(sons=ATIVO) beep_pi_longo();
+			if(sons==ATIVO) beep_pi_longo();
 			menu_item=SUBIR_TEMP_MASHOUT;
 			break;
 		}
@@ -1045,7 +1164,7 @@ void realiza_mostura()
 	temperatura_atual = leitura_temperatura();
 	
 	if(temperatura_atual>=temperatura[RAMPA2]){
-		if(sons=ATIVO) beep_pi_longo();
+		if(sons==ATIVO) beep_pi_longo();
 		
 		Time t2=calcula_horario(tempo[RAMPA2]); //calcula tempo que a rampa foi inciada
 		hora[RAMPA2]=t2.hour;
@@ -1060,12 +1179,12 @@ void realiza_mostura()
 		if(qtd_rampas>=3){
 		popup_msg("INDO PARA...",2);
 		popup_msg("RAMPA N3",2);
-		if(sons=ATIVO) beep_pi_longo();
+		if(sons==ATIVO) beep_pi_longo();
 		etapa_da_mostura=SUBIR_TEMP_RAMPA3;
 		}
 		else{
 			menu_item=SUBIR_TEMP_MASHOUT;
-			if(sons=ATIVO) beep_pi_longo();
+			if(sons==ATIVO) beep_pi_longo();
 		}
 	}
 	break;	
@@ -1077,7 +1196,7 @@ void realiza_mostura()
 	temperatura_atual = leitura_temperatura();
 	
 	if(temperatura_atual>=temperatura[RAMPA3]){
-		if(sons=ATIVO) beep_pi_longo();
+		if(sons==ATIVO) beep_pi_longo();
 		
 		Time t2=calcula_horario(tempo[RAMPA3]); //calcula tempo que a rampa foi inciada
 		hora[RAMPA3]=t2.hour;
@@ -1089,7 +1208,7 @@ void realiza_mostura()
 //------------------ EXECUTA RAMPA2 -----------------//	
 	case EXEC_RAMPA3:
 		if(realiza_rampa(RAMPA3)==0){
-		if(sons=ATIVO) beep_pi_longo();
+		if(sons==ATIVO) beep_pi_longo();
 		menu_item=SUBIR_TEMP_MASHOUT;
 		}
 	break;
@@ -1114,3 +1233,97 @@ if(tempo_restante(RAMPA)>0){
 return(0);
 }
 
+
+
+void menu_ultima_receita()
+{
+	if(menu_item==MENU_ULTIMA_RECEITA) {
+	byte retorno=0;
+	
+	exibe_sim_nao("ULTIMA RECEITA");
+	controle_comandos(&retorno);
+	
+		if(retorno==1){
+		leitura_receita(); // le a memoria e preenche as variaveis com a ultima receita gravada
+		menu_item=MENU_MOSTURA;
+		if(sons==ATIVO) beep_pi_longo();
+		}
+		else if(retorno==2) menu_item=MENU_PRINCIPAL;
+		
+	delay(200);
+	}
+}
+
+
+void grava_receita()
+{
+	
+	unsigned int buffer;
+	DS1307_RAM ram;
+	
+	limpa_memoria(); //chama funcao que limpa a memoria do RTC
+	
+	ram.cell[0]= (qtd_rampas >> 0) & 0xff;  //grava os unsigned int em bytes
+	ram.cell[1]= (qtd_rampas >> 8) & 0xff;
+	
+	ram.cell[2]= (temperatura[RAMPA1] >> 0) & 0xff; 
+	ram.cell[3]= (temperatura[RAMPA1] >> 8) & 0xff;
+	
+	ram.cell[4]= (temperatura[RAMPA2] >> 0) & 0xff;
+	ram.cell[5]= (temperatura[RAMPA2] >> 8) & 0xff;
+	
+	ram.cell[6]= (temperatura[RAMPA3] >> 0) & 0xff;
+	ram.cell[7]= (temperatura[RAMPA3] >> 8) & 0xff;
+	
+	ram.cell[8]= (tempo[RAMPA1] >> 0) & 0xff;
+	ram.cell[9]= (tempo[RAMPA1] >> 8) & 0xff;
+	
+	ram.cell[10]= (tempo[RAMPA2] >> 0) & 0xff;
+	ram.cell[11]= (tempo[RAMPA2] >> 8) & 0xff;
+	
+	ram.cell[12]= (tempo[RAMPA3] >> 0) & 0xff;
+	ram.cell[13]= (tempo[RAMPA3] >> 8) & 0xff;
+	
+	ram.cell[14]= (tempo[MASHOUT] >> 0) & 0xff;
+	ram.cell[15]= (tempo[MASHOUT] >> 8) & 0xff;
+	
+	ram.cell[16]= (tempo[FERVURA] >> 0) & 0xff;
+	ram.cell[17]= (tempo[FERVURA] >> 8) & 0xff;
+
+	rtc.writeBuffer(ram); // escreve na memoria
+	
+	
+	
+	
+}
+
+
+void leitura_receita()
+{
+	DS1307_RAM ram;
+	ram=rtc.readBuffer(); 	//realiza leitura de toda memoria
+
+	//grava os bytes nos respectivos unsigned int
+	
+	tempo[FERVURA] = (ram.cell[17] << 8) + (ram.cell[16] << 0);
+	tempo[MASHOUT] = (ram.cell[15] << 8) + (ram.cell[14] << 0);
+	
+	tempo[RAMPA3] = (ram.cell[13] << 8) + (ram.cell[12] << 0);
+	tempo[RAMPA2] = (ram.cell[11] << 8) + (ram.cell[10] << 0);
+	tempo[RAMPA1] = (ram.cell[9] << 8) + (ram.cell[8] << 0);
+	
+	temperatura[RAMPA3] =(ram.cell[7] << 8) + (ram.cell[6] << 0);
+	temperatura[RAMPA2] =(ram.cell[5] << 8) + (ram.cell[4] << 0);
+	temperatura[RAMPA1] =(ram.cell[3] << 8) + (ram.cell[2] << 0);
+	
+	qtd_rampas = (ram.cell[1] << 8) + (ram.cell[0] << 0);
+
+}
+
+
+void limpa_memoria()
+{
+	DS1307_RAM ram;
+	for(unsigned int i=0;i<55; i++) ram.cell[i]=0x0;
+	rtc.writeBuffer(ram);
+}
