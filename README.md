@@ -1,7 +1,7 @@
 # projeto01
 Controlador para automação de produção de cerveja, construído com Arduino.
 
-Este projeto é fruto da necessidade de automação do processo de brassagem de cervejas, no âmbito doméstico.
+Este projeto é fruto da necessidade de automação do processo de brassagem de cervejas no âmbito doméstico.
 				
    	No protótipo desenvolvido, utilizou-se os seguintes componentes:
     -> 1PCS 5V low level trigger One 1 Channel Relay Module interface Board Shield For PIC AVR DSP ARM MCU Arduino .
